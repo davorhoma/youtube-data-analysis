@@ -1,6 +1,7 @@
 from pyspark.sql import SparkSession, functions as F
 import sys
 
+MAX_REALISTIC_VIEWS = 25_000_000_000
 
 def to_snake_case(name: str) -> str:
     import re
@@ -99,6 +100,8 @@ if __name__ == "__main__":
         .withColumn("dislikes", F.col("dislikes").cast("long"))
         .withColumn("comment_count", F.col("comment_count").cast("long"))
     )
+
+    df_selected = df_selected.filter(F.col("view_count") <= MAX_REALISTIC_VIEWS)
 
     # Parsiranje ISO 8601 trajanja (PT#M#S, PT#H#M#S itd.)
     df_selected = (

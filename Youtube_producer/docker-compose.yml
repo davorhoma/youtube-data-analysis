@@ -1,0 +1,21 @@
+version: "3"
+
+networks:
+  youtube-trending-data-analysis:
+    name: youtube-trending-data-analysis
+    external: true
+
+services:
+  youtube-producer:
+    build: .
+    container_name: youtube-producer
+    restart: unless-stopped
+    networks:
+      - youtube-trending-data-analysis
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: broker1:9092
+      TOPIC_NAME: youtube_stream_data
+      BATCH_SIZE: 550
+      INTERVAL_SECONDS: 40
+    volumes:
+      - ./youtube_realtime_data.csv:/app/youtube_realtime_data.csv
