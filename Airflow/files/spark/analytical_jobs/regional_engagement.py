@@ -14,8 +14,8 @@ if __name__ == "__main__":
 
     avg_engagement_per_channel = (
         df.groupBy("region_code")
-        .agg(F.avg("engagement").alias("avg_engagement"))
-        .orderBy(F.desc("avg_engagement"))
+        .agg(F.avg("engagement").alias("average_engagement"))
+        .orderBy(F.desc("average_engagement"))
         .limit(20)
     )
 

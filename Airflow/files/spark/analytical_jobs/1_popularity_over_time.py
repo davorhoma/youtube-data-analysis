@@ -12,17 +12,15 @@ if __name__ == "__main__":
 
     df = spark.read.parquet(input_file_path)
 
-    # Grupisanje po trending_date
     popularity_over_time = (
-        df.groupBy("trending_date", "title")
+        df.groupBy("trending_date")
         .agg(
-            F.avg("view_count").alias("avg_views"),
+            F.avg("view_count").alias("average_views"),
             F.sum("view_count").alias("total_views"),
             F.count("video_id").alias("video_count")
         )
-        .select("trending_date", "title", "avg_views", "total_views", "video_count")
+        .select("trending_date", "average_views", "total_views", "video_count")
         .orderBy("trending_date")
-        .limit(50)
     )
 
     # Window za moving average (7 dana)
@@ -36,7 +34,7 @@ if __name__ == "__main__":
         popularity_over_time
         .withColumn(
             "moving_avg_7d",
-            F.avg("avg_views").over(window_spec)
+            F.avg("average_views").over(window_spec)
         )
     )
 

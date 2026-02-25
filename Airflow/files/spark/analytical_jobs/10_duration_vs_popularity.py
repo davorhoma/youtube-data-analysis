@@ -12,23 +12,21 @@ if __name__ == "__main__":
 
     df = spark.read.parquet(input_file_path)
 
-    # Binning: kratki (<4 min), srednji (4-20 min), dugi (>20 min)
-    df_binned = df.withColumn(
-        "duration_bin",
-        when(col("duration_seconds") < 240, "kratki")
-        .when((col("duration_seconds") >= 240) & (col("duration_seconds") <= 1200), "srednji")
-        .otherwise("dugi")
+    df_with_length = df.withColumn(
+        "duration_length",
+        when(col("duration_seconds") < 240, "short (< 4 min)")
+        .when((col("duration_seconds") >= 240) & (col("duration_seconds") <= 1200), "medium (4-20 min)")
+        .otherwise("long (> 20 min)")
     )
 
     avg_views_per_duration = (
-        df_binned.groupBy("duration_bin")
-        .agg(F.avg("view_count").alias("avg_views"))
-        .orderBy("duration_bin")
+        df_with_length.groupBy("duration_length")
+        .agg(F.avg("view_count").alias("average_views"))
+        .orderBy("duration_length")
     )
 
     avg_views_per_duration.show(truncate=False)
 
-    # Save results to MongoDB
     (
         avg_views_per_duration.write.format("mongodb")
         .mode("overwrite")

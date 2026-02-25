@@ -86,9 +86,44 @@ if __name__ == "__main__":
         "likes",
         "dislikes",
         "comment_count",
+        "duration",
     ]
 
     df_selected = df.select(*selected_columns)
+
+    df_selected = (
+        df_selected.withColumn("trending_date", F.to_date("trending_date"))
+        .withColumn("published_at", F.to_timestamp("published_at"))
+        .withColumn("view_count", F.col("view_count").cast("long"))
+        .withColumn("likes", F.col("likes").cast("long"))
+        .withColumn("dislikes", F.col("dislikes").cast("long"))
+        .withColumn("comment_count", F.col("comment_count").cast("long"))
+    )
+
+    # Parsiranje ISO 8601 trajanja (PT#M#S, PT#H#M#S itd.)
+    df_selected = (
+        df_selected.withColumn(
+            "duration_h",
+            F.regexp_extract("duration", r"PT(\d+)H", 1).cast("int"),
+        )
+        .withColumn(
+            "duration_m",
+            F.regexp_extract("duration", r"PT(?:\d+H)?(\d+)M", 1).cast("int"),
+        )
+        .withColumn(
+            "duration_s",
+            F.regexp_extract("duration", r"PT(?:\d+H)?(?:\d+M)?(\d+)S", 1).cast("int"),
+        )
+    )
+
+    df_selected = df_selected.withColumn(
+        "duration_seconds",
+        (
+            F.coalesce(F.col("duration_h"), F.lit(0)) * 3600
+            + F.coalesce(F.col("duration_m"), F.lit(0)) * 60
+            + F.coalesce(F.col("duration_s"), F.lit(0))
+        ),
+    ).drop("duration_h", "duration_m", "duration_s", "duration")
 
     df_selected = df_selected.withColumn(
         "engagement",
@@ -100,6 +135,6 @@ if __name__ == "__main__":
 
     (df_selected.write.mode("overwrite").parquet(output_path))
 
-    df.show(truncate=False)
+    df_selected.show(truncate=False)
 
     spark.stop()

@@ -1,5 +1,4 @@
 from pyspark.sql import SparkSession, functions as F
-from pyspark.sql.functions import col, count
 import sys
 
 if __name__ == "__main__":
@@ -13,9 +12,9 @@ if __name__ == "__main__":
     df = spark.read.parquet(input_file_path)
 
     avg_engagement_per_channel = (
-        df.groupBy("channel_id", "channel_title", "title")
-        .agg(F.avg("engagement").alias("avg_engagement"))
-        .orderBy(F.desc("avg_engagement"))
+        df.groupBy("channel_id", "channel_title")
+        .agg(F.max("engagement").alias("peak_engagement"))
+        .orderBy(F.desc("peak_engagement"))
         .limit(20)
     )
 

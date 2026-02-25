@@ -10,33 +10,34 @@ if __name__ == "__main__":
 
     spark = SparkSession.builder.appName("fastest_growth_videos").getOrCreate()
 
-    # Učitavanje parquet fajla
     df = spark.read.parquet(input_file_path)
 
-    # Definisanje prozora po video_id, sortirano po trending_date
-    window_spec = Window.partitionBy("video_id").orderBy("trending_date")
+    window_spec = Window.partitionBy("video_id", "region_code").orderBy("trending_date")
 
-    # Dodavanje kolone sa prethodnim brojem pregleda
-    df_with_lag = df.withColumn("prev_views", F.lag("view_count").over(window_spec))
+    df_with_lag = df.withColumn(
+        "prev_views", F.lag("view_count").over(window_spec)
+    ).withColumn("prev_date", F.lag("trending_date").over(window_spec))
 
-    # Računanje dnevne promene pregleda
-    df_with_delta = df_with_lag.withColumn(
-        "daily_growth",
-        F.when(F.col("prev_views").isNotNull(), F.col("view_count") - F.col("prev_views")).otherwise(0)
+    # daily_views_growth >= 0 && daily_views_growth <= 200_000_000 da bi se izbegle anomalije u podacima
+    # Postojao je slučaj sa video klipom koji je imao dnevni rast od preko 700 miliona pregleda, što je kasnije ispravljeno od strane YouTube-a, ali je i dalje prisutno u datasetu.
+    df_with_delta = (
+        df_with_lag.withColumn("date_diff", F.datediff("trending_date", "prev_date"))
+        .withColumn("daily_views_growth", F.col("view_count") - F.col("prev_views"))
+        .filter(F.col("prev_views").isNotNull())
+        .filter(F.col("date_diff") == 1)
+        .filter(F.col("daily_views_growth") >= 0)
+        .filter(F.col("daily_views_growth") <= 200_000_000)
     )
 
-    # Grupisanje po video_id i title, uz maksimalni rast
     top_growth_videos = (
-        df_with_delta.groupBy("video_id", "title", "channel_id", "channel_title")
-        .agg(F.max("daily_growth").alias("max_daily_growth"))
-        .orderBy(F.desc("max_daily_growth"))
+        df_with_delta.groupBy("video_id", "title")
+        .agg(F.max("daily_views_growth").alias("max_daily_views_growth"))
+        .orderBy(F.desc("max_daily_views_growth"))
         .limit(20)
     )
 
-    # Prikaz rezultata
     top_growth_videos.show(truncate=False)
 
-    # Snimanje rezultata u MongoDB
     (
         top_growth_videos.write.format("mongodb")
         .mode("overwrite")

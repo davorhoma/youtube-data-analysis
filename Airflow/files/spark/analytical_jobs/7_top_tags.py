@@ -7,30 +7,22 @@ if __name__ == "__main__":
     mongo_uri = sys.argv[2]
     mongo_db = sys.argv[3]
     mongo_collection = sys.argv[4]
-    top_percent = float(sys.argv[5])  # npr. 0.1 za top 10%
 
     spark = SparkSession.builder.appName("top_tags").getOrCreate()
 
-    # Učitavanje podataka
     df = spark.read.parquet(input_file_path)
 
-    # Određivanje praga za top X% po view_count
-    view_threshold = df.approxQuantile("view_count", [1 - top_percent], 0.01)[0]
-
-    top_videos = df.filter(col("view_count") >= view_threshold)
-
-    # Parsiranje tagova i brojanje
     tags_count = (
-        top_videos
+        df
         .withColumn("tag", explode(split(col("tags"), r"\|")))
         .groupBy("tag")
-        .agg(F.count("*").alias("count"))
-        .orderBy(F.desc("count"))
+        .agg(F.count("*").alias("number_of_videos"))
+        .orderBy(F.desc("number_of_videos"))
+        .limit(20)
     )
 
     tags_count.show(truncate=False)
 
-    # Slanje rezultata u MongoDB
     (
         tags_count.write.format("mongodb")
         .mode("overwrite")

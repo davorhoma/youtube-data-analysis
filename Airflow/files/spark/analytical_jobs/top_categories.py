@@ -14,8 +14,8 @@ if __name__ == "__main__":
 
     top_categories = (
         df.groupBy("category_id", "category_name")
-        .agg(count("*").alias("count"))
-        .orderBy(col("count").desc())
+        .agg(count("*").alias("number_of_videos"))
+        .orderBy(col("number_of_videos").desc())
         .limit(10)
     )
 

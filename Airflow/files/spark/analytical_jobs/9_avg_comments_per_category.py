@@ -10,23 +10,20 @@ if __name__ == "__main__":
 
     spark = SparkSession.builder.appName("avg_comments_per_category").getOrCreate()
 
-    # Učitavanje glavnog dataseta
     df = spark.read.parquet(input_file_path)
 
     df.show(5, truncate=False)
 
-    # Računanje prosečnog broja komentara po kategoriji
     avg_comments_per_category = (
         df.groupBy("category_id", "category_name")
-        .agg(F.avg("comment_count").alias("avg_comments"))
-        .select("category_id", "category_name", "avg_comments")
-        .orderBy(F.desc("avg_comments"))
+        .agg(F.avg("comment_count").alias("average_comments"))
+        .select("category_id", "category_name", "average_comments")
+        .orderBy(F.desc("average_comments"))
         .limit(20)
     )
 
     avg_comments_per_category.show(truncate=False)
 
-    # Upis u MongoDB
     (
         avg_comments_per_category.write.format("mongodb")
         .mode("overwrite")
