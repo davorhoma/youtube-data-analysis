@@ -98,7 +98,7 @@ Implementirano je **5 real-time analitičkih upita** koji se obrađuju u toku pr
 
 ## Vizuelizacija
 
-Svi rezultati — i batch i real-time — dostupni su kroz **Metabase** dashboarde. Metabase je dostupan na `http://localhost:3000` nakon pokretanja klastera.
+Svi rezultati — i batch i real-time — dostupni su kroz **Metabase** dashboard-e. Metabase je dostupan na `http://localhost:3000` nakon pokretanja klastera.
 
 ---
 
