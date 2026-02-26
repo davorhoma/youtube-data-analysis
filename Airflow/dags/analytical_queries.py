@@ -1,8 +1,9 @@
 from datetime import datetime
 
 from airflow.sdk import dag, Variable
+from airflow.decorators import task
 from airflow.providers.apache.spark.operators.spark_submit import SparkSubmitOperator
-from airflow.sdk.bases.hook import BaseHook
+from airflow.providers.apache.hdfs.hooks.webhdfs import WebHDFSHook
 
 
 @dag(
@@ -15,6 +16,19 @@ from airflow.sdk.bases.hook import BaseHook
 def analyse():
     HDFS_DEFAULT_FS = Variable.get("HDFS_DEFAULT_FS")
     MONGO_URI = Variable.get("MONGO_URI")
+
+    @task
+    def load_csv_to_hdfs():
+        hdfs_hook = WebHDFSHook(webhdfs_conn_id="HDFS_CONNECTION")
+        local_source = "files/data/all_regions_youtube_trending_data.csv"
+        hdfs_destination = "/raw_data/all_regions_youtube_trending_data.csv"
+        hdfs_hook.load_file(
+            source=local_source,
+            destination=hdfs_destination,
+            overwrite=True,
+        )
+
+    upload = load_csv_to_hdfs()
 
     prepare_initial_data = SparkSubmitOperator(
         task_id="prepare_initial_data",
@@ -193,7 +207,8 @@ def analyse():
     )
 
     (
-        prepare_initial_data
+        upload
+        >> prepare_initial_data
         >> [
             top_categories,
             top_engagement,

@@ -1,11 +1,11 @@
-from pyspark.sql import DataFrame, SparkSession, functions as F
+from pyspark.sql import DataFrame, functions as F
 from pyspark.sql.window import Window
 from sinks import mongo_sink
 from config import MONGO_DB, CHECKPOINT_BASE, MONGO_URI
 
 
 def duration_distribution(parsed: DataFrame) -> DataFrame:
-    p6 = (
+    dd_p = (
         parsed.groupBy(F.window("event_time", "30 seconds"))
         .agg(
             F.sum(F.when(F.col("duration_sec") < 240, 1).otherwise(0)).alias(
@@ -25,12 +25,12 @@ def duration_distribution(parsed: DataFrame) -> DataFrame:
         .drop("window")
     )
     return mongo_sink(
-        p6, "duration_distribution", "p6_duration_dist", output_mode="update"
+        dd_p, "duration_distribution", "p6_duration_dist", output_mode="update"
     )
 
 
 def channel_regional_reach(parsed: DataFrame) -> DataFrame:
-    p8_agg = (
+    crr_agg = (
         parsed.groupBy(
             F.window("event_time", "30 seconds"),
             "channel_id",
@@ -44,7 +44,7 @@ def channel_regional_reach(parsed: DataFrame) -> DataFrame:
         .drop("window", "channel_id")
     )
 
-    def write_p8_batch(batch_df: DataFrame, _epoch_id: int):
+    def write_crr_batch(batch_df: DataFrame, _epoch_id: int):
         if batch_df.count() == 0:
             return
 
@@ -85,7 +85,7 @@ def channel_regional_reach(parsed: DataFrame) -> DataFrame:
         )
 
     return (
-        p8_agg.writeStream.foreachBatch(write_p8_batch)
+        crr_agg.writeStream.foreachBatch(write_crr_batch)
         .outputMode("update")
         .option("checkpointLocation", f"{CHECKPOINT_BASE}/p8_channel_reach")
         .trigger(processingTime="10 seconds")
@@ -94,7 +94,7 @@ def channel_regional_reach(parsed: DataFrame) -> DataFrame:
 
 
 def trending_freshness(parsed: DataFrame) -> DataFrame:
-    p11_agg = (
+    tf_agg = (
         parsed.groupBy(
             F.window("event_time", "30 seconds"),
             "video_id",
@@ -106,7 +106,7 @@ def trending_freshness(parsed: DataFrame) -> DataFrame:
         .drop("window")
     )
 
-    def write_p11_batch(batch_df: DataFrame, epoch_id: int):
+    def write_tf_batch(batch_df: DataFrame, epoch_id: int):
         if batch_df.count() == 0:
             return
 
@@ -155,7 +155,7 @@ def trending_freshness(parsed: DataFrame) -> DataFrame:
         )
 
     return (
-        p11_agg.writeStream.foreachBatch(write_p11_batch)
+        tf_agg.writeStream.foreachBatch(write_tf_batch)
         .outputMode("update")
         .option("checkpointLocation", f"{CHECKPOINT_BASE}/p11_freshness")
         .trigger(processingTime="15 seconds")
@@ -164,7 +164,7 @@ def trending_freshness(parsed: DataFrame) -> DataFrame:
 
 
 def historical_overlap(parsed: DataFrame, hist_channel_ids: DataFrame) -> DataFrame:
-    p_agg = (
+    ho_agg = (
         parsed.groupBy(F.window("event_time", "30 seconds"), "channel_id")
         .agg(F.max("view_count").alias("view_count"))
         .withColumn("window_start", F.col("window.start").cast("string"))
@@ -206,7 +206,7 @@ def historical_overlap(parsed: DataFrame, hist_channel_ids: DataFrame) -> DataFr
         )
 
     return (
-        p_agg.writeStream.foreachBatch(write_batch)
+        ho_agg.writeStream.foreachBatch(write_batch)
         .outputMode("update")
         .option("checkpointLocation", f"{CHECKPOINT_BASE}/p_hist_overlap")
         .trigger(processingTime="30 seconds")
@@ -214,7 +214,9 @@ def historical_overlap(parsed: DataFrame, hist_channel_ids: DataFrame) -> DataFr
     )
 
 
-def current_vs_historical_views(parsed: DataFrame, batch_stats_raw: DataFrame) -> DataFrame:
+def current_vs_historical_views(
+    parsed: DataFrame, batch_stats_raw: DataFrame
+) -> DataFrame:
     hist_row = batch_stats_raw.agg(
         F.max("view_count").alias("hist_max_views"),
         F.avg("view_count").alias("hist_avg_views"),

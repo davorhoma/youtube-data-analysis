@@ -2,7 +2,6 @@ from pyspark.sql import SparkSession, functions as F
 from pyspark.sql import DataFrame
 from config import (
     BATCH_STATS_PATH,
-    MONGO_URI,
     MONGO_DB,
     TOPIC_NAME,
     KAFKA_BOOTSTRAP_SERVERS,
@@ -43,22 +42,6 @@ parsed = (
         ),
     )
     .withColumn("duration_sec", duration_to_seconds(F.col("duration")))
-    .withColumn(
-        "engagement_score",
-        F.round(
-            (F.col("like_count") + F.col("comment_count"))
-            / F.greatest(F.col("view_count"), F.lit(1)),
-            6,
-        ),
-    )
-    .withColumn(
-        "like_ratio",
-        F.round(
-            F.col("like_count")
-            / F.greatest(F.col("like_count") + F.col("dislike_count"), F.lit(1)),
-            4,
-        ),
-    )
     .withWatermark("event_time", "30 seconds")
 )
 
@@ -81,51 +64,13 @@ except Exception as e:
     )
     batch_stats = spark.createDataFrame([], batch_stats_schema)
 
-from pyspark.sql import functions as F
+hist_channel_ids = batch_stats_raw.select("channel_id").distinct()
 
-top10_batch_static = (
-    spark.read.format("mongodb")
-    .option("connection.uri", MONGO_URI)
-    .option("database", "youtube")
-    .option("collection", "top_categories")
-    .load()
-    .select("category_id", "category_name", "number_of_videos")
-)
-total_historical = top10_batch_static.agg(F.sum("number_of_videos")).first()[0]
-top10_batch_static = top10_batch_static.withColumn(
-    "historical_pct", F.col("number_of_videos") / F.lit(total_historical) * 100
-)
-
-try:
-    batch_channel_stats = (
-        batch_stats_raw
-        .groupBy("channel_id", "channel_title")
-        .agg(
-            F.approx_count_distinct("region_code").alias("hist_avg_reach"),
-        )
-    )
-except Exception as e:
-    print(f"[WARN] Channel batch statistike nisu dostupne ({e}). P8 radi bez istorijskih podataka.")
-    batch_channel_stats = spark.createDataFrame(
-        [],
-        StructType([
-            StructField("channel_id",      StringType()),
-            StructField("channel_title",   StringType()),
-            StructField("hist_avg_reach",  DoubleType()),
-        ]),
-    )
-
-hist_channel_ids = (
-    batch_stats_raw
-    .select("channel_id")
-    .distinct()
-)
-
-q6 = duration_distribution(parsed)
-q8 = channel_regional_reach(parsed)
-q11 = trending_freshness(parsed)
-q12 = historical_overlap(parsed, hist_channel_ids)
-q13 = current_vs_historical_views(parsed, batch_stats_raw)
+q1 = duration_distribution(parsed)
+q2 = channel_regional_reach(parsed)
+q3 = trending_freshness(parsed)
+q4 = historical_overlap(parsed, hist_channel_ids)
+q5 = current_vs_historical_views(parsed, batch_stats_raw)
 
 print("✅ Stream procesori pokrenuti.")
 print(f"   P1 — duration_distribution → {MONGO_DB}.duration_distribution")
